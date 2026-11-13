@@ -1,0 +1,1998 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LecturaVoice AI — Live PDF Teacher & Priority Scroll Voice Bot</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    .font-mono-code {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    /* Custom Scrollbar for PDF Viewport */
+    #pdfViewport::-webkit-scrollbar {
+      width: 10px;
+    }
+    #pdfViewport::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    #pdfViewport::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 5px;
+      border: 2px solid #0f172a;
+    }
+    #pdfViewport::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+    @keyframes pulseRing {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.18); opacity: 0.35; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+    .mic-pulse {
+      animation: pulseRing 1.8s infinite ease-in-out;
+    }
+    @keyframes eqBar {
+      0%, 100% { height: 6px; }
+      50% { height: 22px; }
+    }
+    .eq-bar-active {
+      animation: eqBar 0.65s infinite ease-in-out;
+    }
+    .teaching-block {
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .teaching-block-active {
+      box-shadow: 0 0 0 2px #6366f1, 0 10px 30px -5px rgba(99, 102, 241, 0.28);
+      background: linear-gradient(90deg, rgba(99, 102, 241, 0.14) 0%, rgba(30, 41, 59, 0.92) 100%);
+    }
+    .teaching-block-doubt {
+      box-shadow: 0 0 0 2px #f59e0b, 0 10px 30px -5px rgba(245, 158, 11, 0.3);
+      background: linear-gradient(90deg, rgba(245, 158, 11, 0.16) 0%, rgba(30, 41, 59, 0.95) 100%);
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col overflow-x-hidden pb-20 selection:bg-indigo-500 selection:text-white">
+
+  <!-- TOP NAVIGATION & LIVE STATUS BAR -->
+  <header class="sticky top-0 z-30 bg-slate-900/95 backdrop-blur border-b border-slate-800 px-3 sm:px-5 py-2.5">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2.5">
+      <!-- Brand + Mode Switcher -->
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="font-bold text-sm sm:text-base tracking-tight text-white">LecturaVoice AI</h1>
+            <span id="botStateBadge" class="px-2 py-0.5 text-[11px] font-semibold rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+              READY TO TEACH
+            </span>
+          </div>
+          <p class="text-[11px] text-slate-400 hidden sm:block">Live Voice PDF Teacher • Priority User Scroll • Wake-Word Listener</p>
+        </div>
+      </div>
+
+      <!-- SCROLL PRIORITY INDICATOR PILL -->
+      <div class="flex items-center gap-2 bg-slate-950/90 border border-slate-800 rounded-xl px-3 py-1.5">
+        <span id="scrollPriorityDot" class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+        <div class="text-xs">
+          <span class="text-slate-400 font-medium">Scroll Control:</span>
+          <span id="scrollPriorityLabel" class="font-semibold text-emerald-400 ml-1">Bot Auto-Scroll Ready</span>
+          <span id="scrollCooldownText" class="text-[11px] text-amber-300 ml-1 hidden">(Resuming in 6s)</span>
+        </div>
+        <button id="syncScrollBtn" onclick="forceReturnScrollToBot()" class="hidden ml-1.5 px-2 py-0.5 text-[11px] font-medium bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 border border-indigo-500/40 rounded-md transition">
+          Re-Sync Bot
+        </button>
+        <button id="jumpTeachHereBtn" onclick="teachFromVisibleViewport()" class="hidden px-2 py-0.5 text-[11px] font-medium bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 rounded-md transition" title="Start teaching from the paragraph currently visible on your screen">
+          Teach Here
+        </button>
+      </div>
+
+      <!-- Always-Visible Header Quick Transport (Pause / Continue / Doubt) -->
+      <div class="flex items-center gap-1.5 bg-slate-950/90 border border-slate-800 rounded-xl px-2 py-1">
+        <button id="headerContinueBtn" onclick="triggerVoiceCommand('continue', 'Header Continue button')" class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1 transition" title="Start or Continue Live Teaching">
+          <span>▶ Continue</span>
+        </button>
+        <button id="headerPauseBtn" onclick="triggerVoiceCommand('give me a minute', 'Header Pause button')" class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-sky-600/30 hover:bg-sky-600/50 text-sky-200 border border-sky-500/40 flex items-center gap-1 transition" title="Pause teacher & auto-scroll">
+          <span>⏸ Pause</span>
+        </button>
+        <button id="headerDoubtBtn" onclick="triggerVoiceCommand('doubt', 'Header Doubt button')" class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-500/25 hover:bg-amber-500/40 text-amber-200 border border-amber-500/40 flex items-center gap-1 transition" title="Interrupt teacher to ask a doubt">
+          <span>❓ Doubt</span>
+        </button>
+      </div>
+
+      <!-- Right Action Controls -->
+      <div class="flex items-center gap-2">
+        <label for="pdfFileInput" class="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+          <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+          </svg>
+          <span>Upload PDF</span>
+          <input id="pdfFileInput" type="file" accept="application/pdf" class="hidden" onchange="handlePdfUpload(event)" />
+        </label>
+
+        <button id="tabWorkspaceBtn" onclick="switchMainView('workspace')" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-600 text-white transition">
+          Live Classroom
+        </button>
+        <button id="tabBlueprintBtn" onclick="switchMainView('blueprint')" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">
+          Code Architecture
+        </button>
+        <button onclick="toggleSettingsModal(true)" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition" title="Voice & AI API Settings">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- TOAST NOTIFICATION BANNER -->
+  <div id="toastBanner" class="fixed bottom-20 right-5 z-50 hidden max-w-sm bg-slate-900 border border-indigo-500/50 text-slate-100 px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3">
+    <span id="toastIcon" class="w-2.5 h-2.5 rounded-full bg-indigo-400 shrink-0"></span>
+    <p id="toastMessage" class="text-xs font-medium"></p>
+  </div>
+
+  <!-- ALWAYS-ON-SCREEN FLOATING PAUSE / CONTINUE / DOUBT & DEPTH HUD DOCK -->
+  <div id="floatingControlDock" class="fixed bottom-3 inset-x-0 z-40 flex justify-center px-2 sm:px-4 pointer-events-none">
+    <div class="pointer-events-auto bg-slate-900/95 backdrop-blur-md border border-indigo-500/40 rounded-2xl px-3 sm:px-4 py-2 shadow-2xl shadow-black/70 flex flex-wrap items-center justify-center gap-2 sm:gap-3 max-w-full">
+      <!-- Live State Pill -->
+      <div class="flex items-center gap-1.5 pr-1 sm:border-r sm:border-slate-800">
+        <span id="dockStateDot" class="w-2.5 h-2.5 rounded-full bg-slate-400"></span>
+        <span id="dockBlockIndicator" class="text-[11px] font-mono-code font-semibold text-slate-300">Sec 1/6</span>
+      </div>
+
+      <!-- Prev / Continue / Pause / Doubt / Next Buttons (Always Accessible Without Scrolling) -->
+      <div class="flex items-center gap-1.5">
+        <button onclick="stepBlock(-1)" class="px-2 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition" title="Previous Section">
+          ◀
+        </button>
+
+        <button id="dockContinueBtn" onclick="triggerVoiceCommand('continue', 'Floating HUD: continue')" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-emerald-600/25 transition">
+          <span>▶</span>
+          <span id="dockContinueLabel">Continue</span>
+        </button>
+
+        <button id="dockPauseBtn" onclick="triggerVoiceCommand('give me a minute', 'Floating HUD: give me a minute')" class="px-3 py-1.5 rounded-xl bg-sky-600/25 hover:bg-sky-600/40 text-sky-200 border border-sky-500/40 text-xs font-bold flex items-center gap-1.5 transition">
+          <span>⏸</span>
+          <span>Pause</span>
+        </button>
+
+        <button id="dockDoubtBtn" onclick="triggerVoiceCommand('doubt', 'Floating HUD: doubt')" class="px-3 py-1.5 rounded-xl bg-amber-500/25 hover:bg-amber-500/40 text-amber-200 border border-amber-500/40 text-xs font-bold flex items-center gap-1.5 transition">
+          <span>❓</span>
+          <span>Doubt</span>
+        </button>
+
+        <button onclick="stepBlock(1)" class="px-2 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition" title="Next Section">
+          ▶
+        </button>
+      </div>
+
+      <!-- Synced Mini Depth Scroller inside Floating Dock -->
+      <div class="hidden sm:flex items-center gap-2 pl-2 border-l border-slate-800">
+        <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Depth:</span>
+        <input
+          id="dockDepthSlider"
+          type="range"
+          min="1"
+          max="5"
+          step="1"
+          value="3"
+          oninput="updateExplanationDepth(this.value)"
+          class="w-20 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+          title="Slide between 1 (High Efficiency) and 5 (High Depth)"
+        />
+        <span id="dockDepthValue" class="text-[11px] font-mono-code font-bold text-indigo-300">3/5</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN WORKSPACE VIEW -->
+  <main id="workspaceView" class="flex-1 max-w-7xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-4 p-3 sm:p-5">
+
+    <!-- LEFT / CENTER COLUMN: SCROLLABLE PDF SCREEN VIEWPORT (7 COLS) -->
+    <section class="lg:col-span-7 flex flex-col bg-slate-900/70 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+      <!-- PDF Toolbar -->
+      <div class="bg-slate-900 px-4 py-2.5 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-semibold text-slate-300" id="currentDocTitle">ECE-204: Op-Amp Schmitt Triggers, RC Filters & Coupled Oscillations.pdf</span>
+          <span id="pdfPageCounter" class="px-2 py-0.5 text-[11px] font-mono-code bg-slate-800 text-indigo-300 rounded-md">Section 1 / 8</span>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <label class="flex items-center gap-1.5 text-xs text-slate-400 cursor-pointer select-none">
+            <input id="autoScrollToggle" type="checkbox" checked onchange="toggleAutoScrollEnabled(this.checked)" class="rounded bg-slate-800 border-slate-700 text-indigo-500 focus:ring-0" />
+            <span>Bot Auto-Scroll</span>
+          </label>
+          <span class="text-slate-700">|</span>
+          <span class="text-[11px] text-slate-400">Cooldown:</span>
+          <select id="cooldownSelect" onchange="updateCooldownDuration(this.value)" class="bg-slate-800 border border-slate-700 rounded text-[11px] text-slate-200 px-1.5 py-0.5">
+            <option value="4">4s</option>
+            <option value="6" selected>6s</option>
+            <option value="10">10s</option>
+            <option value="999">Manual Lock</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Priority Scroll Explanation Banner inside PDF Header -->
+      <div id="userScrollAlertBar" class="hidden bg-amber-500/15 border-b border-amber-500/30 px-4 py-2 flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2 text-xs text-amber-200">
+          <svg class="w-4 h-4 text-amber-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11" />
+          </svg>
+          <span><strong>Manual Scroll Priority Active:</strong> You scrolled the PDF, so the bot yielded scroll control to you while continuing to explain.</span>
+        </div>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button onclick="teachFromVisibleViewport()" class="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-amber-400 text-slate-950 hover:bg-amber-300 transition">
+            Teach This Visible Section
+          </button>
+          <button onclick="forceReturnScrollToBot()" class="px-2.5 py-1 rounded-md text-[11px] font-medium bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700 transition">
+            Return Scroll to Bot
+          </button>
+        </div>
+      </div>
+
+      <!-- DRAG & DROP PDF UPLOAD BAR -->
+      <div id="pdfDropZoneBar"
+        ondragover="handlePdfDragOver(event)"
+        ondragleave="handlePdfDragLeave(event)"
+        ondrop="handlePdfDrop(event)"
+        onclick="document.getElementById('pdfFileInput').click()"
+        class="mx-4 mt-3 px-4 py-2.5 rounded-xl border border-dashed border-indigo-500/40 bg-indigo-950/20 hover:bg-indigo-950/40 hover:border-indigo-400 transition cursor-pointer flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2.5">
+          <div class="w-7 h-7 rounded-lg bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-300">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+          </div>
+          <div>
+            <p class="text-xs font-semibold text-indigo-200">Drag &amp; Drop any PDF file here (or click to browse)</p>
+            <p class="text-[11px] text-slate-400">Extracts pages &amp; text blocks automatically so the voice teacher can scroll and explain at your chosen depth</p>
+          </div>
+        </div>
+        <span class="px-2.5 py-1 rounded-md text-[10px] font-mono-code font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+          PDF.js Ready
+        </span>
+      </div>
+
+      <!-- SCROLLABLE PDF VIEWPORT -->
+      <div id="pdfViewport"
+        ondragover="handlePdfDragOver(event)"
+        ondragleave="handlePdfDragLeave(event)"
+        ondrop="handlePdfDrop(event)"
+        class="relative flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 max-h-[64vh] lg:max-h-[70vh] bg-slate-950/60">
+        <!-- Drag Overlay -->
+        <div id="pdfDragOverlay" class="hidden sticky top-2 inset-x-0 z-20 p-6 rounded-2xl border-2 border-dashed border-indigo-400 bg-slate-900/95 text-center shadow-2xl">
+          <p class="text-sm font-bold text-indigo-300">Drop PDF file here to load into Live Classroom</p>
+          <p class="text-xs text-slate-400 mt-1">Pages will be parsed into interactive auto-scrolling teaching blocks</p>
+        </div>
+        <!-- Rendered PDF Pages / Interactive Lecture Blocks Injected Here -->
+        <div id="pdfContentContainer" class="space-y-5 max-w-3xl mx-auto"></div>
+      </div>
+
+      <!-- Bottom Progress Bar -->
+      <div class="bg-slate-900 px-4 py-2 border-t border-slate-800 flex items-center justify-between gap-3">
+        <span class="text-[11px] text-slate-400">Lecture Progress</span>
+        <div class="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
+          <div id="lectureProgressBar" class="h-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all duration-300" style="width: 12.5%"></div>
+        </div>
+        <span id="lectureProgressPercent" class="text-[11px] font-mono-code text-slate-300">12%</span>
+      </div>
+    </section>
+
+    <!-- RIGHT COLUMN: AI TEACHER HUD, ACTIVE LISTENING FEEDBACK & DOUBT CONSOLE (5 COLS) -->
+    <section class="lg:col-span-5 flex flex-col gap-4">
+
+      <!-- 1. LIVE TEACHER VOICE & PLAYBACK CONTROLLER CARD -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2.5">
+            <div id="teacherAvatarRing" class="relative w-10 h-10 rounded-full bg-indigo-600/20 border border-indigo-500/40 flex items-center justify-center">
+              <div class="flex items-end gap-0.5 h-5" id="voiceEqualizer">
+                <span class="w-1 bg-indigo-400 rounded-full h-2 transition-all"></span>
+                <span class="w-1 bg-indigo-400 rounded-full h-3 transition-all"></span>
+                <span class="w-1 bg-indigo-400 rounded-full h-1.5 transition-all"></span>
+                <span class="w-1 bg-indigo-400 rounded-full h-2.5 transition-all"></span>
+              </div>
+            </div>
+            <div>
+              <h2 class="text-sm font-bold text-white flex items-center gap-2">
+                <span>AI Live Teacher</span>
+                <span id="pauseTimerBadge" class="hidden text-[11px] font-mono-code px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">Paused 00:00</span>
+              </h2>
+              <p id="teacherSubtitle" class="text-xs text-slate-400">Click "Start Live Teaching" or say "continue"</p>
+            </div>
+          </div>
+
+          <!-- Speed Selector -->
+          <div class="flex items-center gap-1.5">
+            <label for="speechRateSelect" class="text-[11px] text-slate-400">Speed</label>
+            <select id="speechRateSelect" onchange="updateSpeechRate(this.value)" class="bg-slate-800 border border-slate-700 rounded-lg text-xs text-slate-200 px-2 py-1">
+              <option value="0.9">0.9x</option>
+              <option value="1.0" selected>1.0x</option>
+              <option value="1.15">1.15x</option>
+              <option value="1.3">1.3x</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Primary Transport Controls -->
+        <div class="grid grid-cols-4 gap-2 mb-3">
+          <button id="prevBlockBtn" onclick="stepBlock(-1)" class="px-2.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium flex items-center justify-center gap-1 border border-slate-700 transition">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+            <span>Prev</span>
+          </button>
+
+          <button id="mainPlayPauseBtn" onclick="toggleTeachingPlayback()" class="col-span-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/25 transition">
+            <svg id="playIconSvg" class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"/></svg>
+            <span id="mainPlayPauseLabel">Start Live Teaching</span>
+          </button>
+
+          <button id="nextBlockBtn" onclick="stepBlock(1)" class="px-2.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium flex items-center justify-center gap-1 border border-slate-700 transition">
+            <span>Next</span>
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+
+        <!-- EXPLANATION DEPTH SCROLLER (HIGH EFFICIENCY <-> HIGH DEPTH) -->
+        <div class="mb-3 bg-slate-950/85 border border-slate-800 rounded-xl p-3">
+          <div class="flex items-center justify-between mb-1.5">
+            <label for="explanationDepthSlider" class="text-[11px] font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+              <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+              </svg>
+              <span>Explanation Depth Scroller</span>
+            </label>
+            <span id="depthModeBadge" class="px-2 py-0.5 text-[10px] font-semibold rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
+              3 / 5 • Balanced Classroom
+            </span>
+          </div>
+
+          <input
+            id="explanationDepthSlider"
+            type="range"
+            min="1"
+            max="5"
+            step="1"
+            value="3"
+            oninput="updateExplanationDepth(this.value)"
+            class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+          />
+
+          <div class="flex items-center justify-between text-[10px] text-slate-400 mt-1.5 select-none">
+            <button type="button" onclick="setDepthPreset(1)" class="hover:text-emerald-300 transition font-medium">⚡ 1: High Efficiency (TL;DR)</button>
+            <button type="button" onclick="setDepthPreset(3)" class="hover:text-indigo-300 transition font-medium">🎓 3: Balanced</button>
+            <button type="button" onclick="setDepthPreset(5)" class="hover:text-amber-300 transition font-medium">🔬 5: High Depth (Derivations)</button>
+          </div>
+          <p id="depthModeDescription" class="text-[11px] text-slate-400 mt-1">
+            Explains core concepts, formulas, and how each stage operates at a natural lecture pace.
+          </p>
+        </div>
+
+        <!-- Live Spoken Teacher Script Box -->
+        <div class="bg-slate-950/90 border border-slate-800/90 rounded-xl p-3">
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-[11px] uppercase tracking-wider font-semibold text-indigo-400" id="currentExplanationHeader">Professor's Spoken Commentary (You Read PDF • Bot Explains Why)</span>
+            <span class="text-[11px] font-mono-code text-slate-500" id="currentBlockTag">Block #1</span>
+          </div>
+          <p id="liveTeacherTranscript" class="text-xs sm:text-sm text-slate-200 leading-relaxed">
+            Welcome! I'm your live PDF voice teacher. Press "Start Live Teaching" above—I'll explain each section aloud and smoothly scroll the PDF for you. Scroll anytime with your mouse or trackpad to take priority control!
+          </p>
+        </div>
+      </div>
+
+      <!-- 2. ACTIVE LISTENING FEEDBACK & WAKE-WORD DETECTOR CARD -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl">
+        <div class="flex items-center justify-between mb-2.5">
+          <div class="flex items-center gap-2">
+            <div class="relative flex items-center justify-center">
+              <span id="micPulseCircle" class="w-3 h-3 rounded-full bg-emerald-400 mic-pulse"></span>
+            </div>
+            <h3 class="text-xs sm:text-sm font-bold text-white">Active Listening Feedback</h3>
+            <span id="micStatusBadge" class="px-2 py-0.5 text-[10px] font-semibold rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+              MIC LISTENING
+            </span>
+          </div>
+
+          <button id="micToggleBtn" onclick="toggleMicrophoneListening()" class="px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+            Toggle Mic
+          </button>
+        </div>
+
+        <p class="text-[11px] text-slate-400 mb-2.5">
+          Speak naturally or click a voice trigger below to test instant wake-word detection:
+        </p>
+
+        <!-- Wake-Word Trigger Pills (Visual Feedback + Click-to-Simulate) -->
+        <div class="grid grid-cols-3 gap-2 mb-3">
+          <button id="pillDoubt" onclick="triggerVoiceCommand('doubt', 'Simulated voice trigger: doubt')" class="group relative p-2.5 rounded-xl bg-slate-950 hover:bg-amber-500/15 border border-slate-800 hover:border-amber-500/50 text-left transition">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs font-bold text-amber-400">"doubt"</span>
+              <span class="w-2 h-2 rounded-full bg-amber-400/40 group-hover:bg-amber-400"></span>
+            </div>
+            <p class="text-[10px] text-slate-400 leading-tight">Stops teacher & listens to your question</p>
+          </button>
+
+          <button id="pillMinute" onclick="triggerVoiceCommand('give me a minute', 'Simulated voice trigger: give me a minute')" class="group relative p-2.5 rounded-xl bg-slate-950 hover:bg-sky-500/15 border border-slate-800 hover:border-sky-500/50 text-left transition">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs font-bold text-sky-400">"give me a minute"</span>
+              <span class="w-2 h-2 rounded-full bg-sky-400/40 group-hover:bg-sky-400"></span>
+            </div>
+            <p class="text-[10px] text-slate-400 leading-tight">Pauses speech & auto-scroll timer</p>
+          </button>
+
+          <button id="pillContinue" onclick="triggerVoiceCommand('continue', 'Simulated voice trigger: continue')" class="group relative p-2.5 rounded-xl bg-slate-950 hover:bg-emerald-500/15 border border-slate-800 hover:border-emerald-500/50 text-left transition">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs font-bold text-emerald-400">"continue"</span>
+              <span class="w-2 h-2 rounded-full bg-emerald-400/40 group-hover:bg-emerald-400"></span>
+            </div>
+            <p class="text-[10px] text-slate-400 leading-tight">Resumes teaching & bot auto-scroll</p>
+          </button>
+        </div>
+
+        <!-- Live Recognized Speech Stream Bar -->
+        <div class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="text-[11px] font-mono-code text-slate-500 shrink-0">HEARD:</span>
+            <span id="liveHeardTranscript" class="text-xs text-slate-300 truncate italic">Listening for "doubt", "give me a minute", or "continue"...</span>
+          </div>
+          <span id="lastCommandTag" class="px-2 py-0.5 text-[10px] font-mono-code rounded bg-slate-800 text-slate-400 shrink-0">IDLE</span>
+        </div>
+      </div>
+
+      <!-- 3. INTERACTIVE DOUBT CLEARING & Q&A LOG CARD -->
+      <div class="flex-1 bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl flex flex-col">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
+            <span>Doubt Clearing & Live Q&amp;A</span>
+            <span id="doubtStateIndicator" class="hidden px-2 py-0.5 text-[10px] font-semibold rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse">
+              ASK YOUR DOUBT NOW
+            </span>
+          </h3>
+          <button onclick="clearDoubtHistory()" class="text-[11px] text-slate-400 hover:text-slate-200">Clear Log</button>
+        </div>
+
+        <!-- Doubt Conversation Feed -->
+        <div id="doubtChatFeed" class="flex-1 overflow-y-auto space-y-2.5 max-h-48 sm:max-h-56 bg-slate-950/75 border border-slate-800/80 rounded-xl p-3 mb-3">
+          <div class="text-xs text-slate-400 bg-slate-900/90 border border-slate-800 rounded-lg p-2.5">
+            <span class="font-semibold text-indigo-400">Tip:</span> Whenever you say or click <strong>"doubt"</strong>, I immediately pause the lecture and listen to your question about the active PDF section. After clearing your doubt, say or click <strong>"continue"</strong> to resume teaching!
+          </div>
+        </div>
+
+        <!-- Ask a Doubt Input / Quick Preset Doubts -->
+        <div class="space-y-2">
+          <div class="flex flex-wrap gap-1.5" id="quickDoubtChips">
+            <button onclick="submitStudentDoubt('Why does a Schmitt trigger use positive feedback instead of negative feedback?')" class="text-[11px] bg-slate-800/90 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded-full border border-slate-700 transition">
+              "Why positive feedback here?"
+            </button>
+            <button onclick="submitStudentDoubt('Can you intuitive-check this formula with a simple real-world analogy?')" class="text-[11px] bg-slate-800/90 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded-full border border-slate-700 transition">
+              "Give me a real-world analogy"
+            </button>
+            <button onclick="submitStudentDoubt('What happens at high frequency in this circuit?')" class="text-[11px] bg-slate-800/90 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded-full border border-slate-700 transition">
+              "What happens at high frequency?"
+            </button>
+          </div>
+
+          <form onsubmit="handleDoubtFormSubmit(event)" class="flex gap-2">
+            <input id="doubtTextInput" type="text" placeholder="Speak your doubt after saying 'doubt', or type a question here..." class="flex-1 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 outline-none" />
+            <button type="submit" class="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-xs transition shrink-0">
+              Ask Doubt
+            </button>
+          </form>
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- ARCHITECTURE & CODE BLUEPRINT VIEW (HIDDEN BY DEFAULT, TOGGLED VIA HEADER TAB) -->
+  <section id="blueprintView" class="hidden flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 space-y-6">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div>
+          <h2 class="text-lg font-bold text-white">Voice Bot System Architecture &amp; Implementation Blueprint</h2>
+          <p class="text-xs text-slate-400 mt-0.5">How the 3 core subsystems (Priority Scroll Arbiter, Continuous Wake-Word State Machine, and PDF Text-to-Teacher Engine) work together.</p>
+        </div>
+        <button onclick="switchMainView('workspace')" class="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition">
+          Back to Live Classroom
+        </button>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div class="bg-slate-950 border border-slate-800 rounded-xl p-4">
+          <div class="text-xs font-bold text-indigo-400 uppercase tracking-wider mb-1">1. Priority Scroll Arbiter</div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            Separates programmatic bot scrolls (<code class="text-indigo-300">isBotScrolling = true</code>) from human input events (<code class="text-amber-300">wheel</code>, <code class="text-amber-300">touchmove</code>, <code class="text-amber-300">keydown</code>). Any human scroll immediately sets <code class="text-amber-300">scrollMode = 'USER_OVERRIDE'</code> and starts a configurable cooldown timer so the bot never fights your hand on the trackpad or mouse wheel.
+          </p>
+        </div>
+        <div class="bg-slate-950 border border-slate-800 rounded-xl p-4">
+          <div class="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-1">2. Active Listening State Machine</div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            Runs continuous <code class="text-emerald-300">webkitSpeechRecognition</code> with <code class="text-emerald-300">interimResults = true</code> for sub-second keyword interception. Matching <strong>"doubt"</strong> cancels TTS and captures your question; <strong>"give me a minute"</strong> pauses TTS &amp; scroll; <strong>"continue"</strong> resumes teaching from the active block.
+          </p>
+        </div>
+        <div class="bg-slate-950 border border-slate-800 rounded-xl p-4">
+          <div class="text-xs font-bold text-amber-400 uppercase tracking-wider mb-1">3. PDF.js Block &amp; Teacher Sync</div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            Extracts text items with Y-coordinates via <code class="text-amber-300">page.getTextContent()</code>, groups them into logical teaching paragraphs, and links each block to a DOM node so the teacher highlights, explains, and scrolls block-by-block.
+          </p>
+        </div>
+      </div>
+
+      <!-- Copyable Reference Code Block -->
+      <div class="bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
+        <div class="bg-slate-900 px-4 py-2 border-b border-slate-800 flex items-center justify-between">
+          <span class="text-xs font-mono-code text-slate-300">core_arbiter_and_voice_state_machine.js</span>
+          <button onclick="copyBlueprintCode()" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs text-indigo-300 border border-slate-700 transition">
+            Copy Core Module Code
+          </button>
+        </div>
+        <pre id="blueprintCodeBlock" class="p-4 text-xs font-mono-code text-slate-300 overflow-x-auto leading-relaxed"><code>// 1. PRIORITY SCROLL ARBITER (Human Always Beats Bot)
+class PriorityScrollArbiter {
+  constructor(viewportEl, cooldownMs = 6000) {
+    this.viewport = viewportEl;
+    this.cooldownMs = cooldownMs;
+    this.userHasPriority = false;
+    this.isProgrammaticScroll = false;
+    this.cooldownTimer = null;
+
+    const onHumanScrollInput = () => {
+      if (this.isProgrammaticScroll) return;
+      this.userHasPriority = true;
+      clearTimeout(this.cooldownTimer);
+      this.cooldownTimer = setTimeout(() => {
+        this.userHasPriority = false;
+      }, this.cooldownMs);
+    };
+
+    ['wheel', 'touchstart', 'touchmove', 'mousedown'].forEach(evt =>
+      this.viewport.addEventListener(evt, onHumanScrollInput, { passive: true })
+    );
+  }
+
+  botScrollToElement(targetEl) {
+    if (this.userHasPriority || !targetEl) return false; // Yield to human!
+    this.isProgrammaticScroll = true;
+    targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(() => { this.isProgrammaticScroll = false; }, 650);
+    return true;
+  }
+}
+
+// 2. ACTIVE LISTENING WAKE-WORD ROUTER ("doubt", "give me a minute", "continue")
+function evaluateVoiceTranscript(transcript, botState, actions) {
+  const clean = transcript.toLowerCase().trim();
+  if (/\b(doubt|wait i have a doubt|hold on i have a doubt|question)\b/.test(clean)) {
+    actions.enterDoubtMode();
+    return 'DOUBT_MODE';
+  }
+  if (/\b(give me a minute|hold on|pause|wait a second|one minute)\b/.test(clean)) {
+    actions.enterPausedMode();
+    return 'PAUSED_WAITING';
+  }
+  if (/\b(continue|go ahead|resume|keep going|carry on)\b/.test(clean)) {
+    actions.resumeTeaching();
+    return 'TEACHING';
+  }
+  if (botState === 'DOUBT_MODE' &amp;&amp; clean.length &gt; 8) {
+    actions.answerStudentDoubt(transcript);
+  }
+  return botState;
+}</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- SETTINGS MODAL (GEMINI API KEY & VOICE SELECTION) -->
+  <div id="settingsModal" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-5 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="text-sm font-bold text-white">Voice &amp; AI Teacher Settings</h3>
+        <button onclick="toggleSettingsModal(false)" class="text-slate-400 hover:text-white text-xs">Close</button>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <label for="voiceSelectDropdown" class="block text-xs font-medium text-slate-300 mb-1">Teacher Synthesizer Voice (Browser TTS)</label>
+          <select id="voiceSelectDropdown" onchange="handleVoiceSelectionChange(this.value)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200"></select>
+        </div>
+
+        <div>
+          <label for="geminiApiKeyInput" class="block text-xs font-medium text-slate-300 mb-1">
+            Optional Gemini API Key (for Live LLM Doubt Generation)
+          </label>
+          <input id="geminiApiKeyInput" type="password" placeholder="AIzaSy... (Leave blank to use built-in contextual teacher)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 placeholder-slate-500" />
+          <p class="text-[11px] text-slate-400 mt-1">
+            Works out-of-the-box offline using the built-in contextual explanation &amp; doubt solver. If you add a Gemini API key, custom PDF doubts are answered via <code class="text-indigo-300">gemini-2.5-flash</code>.
+          </p>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2">
+        <button onclick="saveSettings()" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition">
+          Save &amp; Apply
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Configure PDF.js worker
+    if (window.pdfjsLib) {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+
+    // =========================================================================
+    // PRE-LOADED MULTI-PAGE INTERACTIVE LECTURE DOCUMENT (ECE & PHYSICS NOTES)
+    // =========================================================================
+    const DEFAULT_LECTURE_BLOCKS = [
+      {
+        id: 'block-1',
+        page: 1,
+        sectionTitle: '1. Schmitt Trigger & Regenerative Comparator Fundamentals',
+        pdfContent: 'Unlike a standard operational amplifier comparator that switches at a single noisy reference threshold, a Schmitt Trigger employs positive feedback (connected to the non-inverting terminal V+) to establish two distinct switching thresholds: the Upper Threshold Voltage (V_UTP) and Lower Threshold Voltage (V_LTP).',
+        formula: 'V_UTP = +V_sat · (R1 / (R1 + R2))   |   V_LTP = -V_sat · (R1 / (R1 + R2))',
+        diagramType: 'schmitt',
+        conceptFocus: 'Positive feedback creates memory (bistability) so noise cannot cause false triggering.',
+        depthScripts: {
+          1: 'Core intuition while you scan Section 1: routing feedback to the plus terminal creates two separate trip points instead of one, which stops noisy signals from chattering.',
+          2: 'As you read this passage, focus on the green feedback loop to V plus. That resistor divider is what splits a single unstable threshold into a safe upper and lower trip window.',
+          3: 'While you read Section 1, think about why a normal comparator fails in real life: random thermal noise wiggles right across a single threshold and causes multiple false glitches. Feeding part of the output back to the non-inverting terminal makes the threshold jump away from the input the instant it switches.',
+          4: 'As you look at the circuit and equations here, picture a room air-conditioner thermostat set to 25 degrees with a 1-degree deadband. It turns on at 26 and waits until 24 to shut off so the compressor never rapid-cycles. Here, R1 and R2 act just like that thermostat deadband.',
+          5: 'From first principles, notice how positive feedback makes the loop gain positive during the switching transition. The moment V in crosses V UTP, regenerative amplification drives the output hard to saturation at the op-amp slew rate, shifting the reference to V LTP and guaranteeing unconditional noise immunity inside that band.'
+        },
+        teacherScript: 'While you read Section 1, think about why a normal comparator fails in real life: random thermal noise wiggles right across a single threshold and causes multiple false glitches. Feeding part of the output back to the non-inverting terminal makes the threshold jump away from the input the instant it switches.',
+        doubtKnowledge: {
+          positive: 'Positive feedback reinforces the current output state! Once the output flips to +V_sat, the reference at V+ jumps up to +V_UTP, meaning small noise dips cannot accidentally flip the output back down.',
+          analogy: 'Think of a room AC thermostat set to 25°C with a ±1°C hysteresis band: the compressor turns ON at 26°C and stays ON until the room cools to 24°C, preventing rapid compressor cycling.',
+          frequency: 'At high input frequencies, if the noise amplitude is smaller than the hysteresis width (V_UTP - V_LTP), the Schmitt trigger completely rejects the high-frequency ripple and outputs a clean square wave.'
+        }
+      },
+      {
+        id: 'block-2',
+        page: 1,
+        sectionTitle: '2. Hysteresis Loop Width & Noise Immunity Window',
+        pdfContent: 'The total hysteresis width ΔV_H is defined as V_UTP − V_LTP = 2 · V_sat · β, where β = R1 / (R1 + R2) is the feedback fraction. Any superimposed noise with peak-to-peak amplitude smaller than ΔV_H is unconditionally rejected.',
+        formula: 'ΔV_H = V_UTP - V_LTP = 2 · V_sat · (R1 / (R1 + R2))',
+        diagramType: 'hysteresis',
+        conceptFocus: 'The resistor ratio β = R1/(R1+R2) directly dials in the width of the deadband.',
+        depthScripts: {
+          1: 'Bottom line here: the deadband width is simply twice the rail voltage times the voltage-divider ratio Beta—make R1 larger if you need to block bigger noise spikes.',
+          2: 'Look at the hysteresis loop graph on screen: the horizontal gap between the upward arrow and downward arrow is your noise margin, controlled purely by R1 over R1 plus R2.',
+          3: 'As you read Section 2, notice why the graph forms a closed rectangular loop rather than a single curve. The circuit remembers which rail it came from! As long as your peak-to-peak noise is narrower than that horizontal gap Delta V H, the output stays rock solid.',
+          4: 'Think of this loop like a stiff mechanical toggle switch on a wall: you have to push your finger past the center spring point before it snaps over. Beta is the stiffness of that spring—increasing R1 widens the snap distance, trading sensitivity for stronger noise rejection.',
+          5: 'In design problems, watch out for the trade-off hidden in this formula: if you make Beta too large to reject heavy noise, Delta V H approaches twice V sat, and a weak input signal may never reach the upper trip point at all. Also remember that op-amp slew rate sets the vertical switching slope.'
+        },
+        teacherScript: 'As you read Section 2, notice why the graph forms a closed rectangular loop rather than a single curve. The circuit remembers which rail it came from! As long as your peak-to-peak noise is narrower than that horizontal gap Delta V H, the output stays rock solid.',
+        doubtKnowledge: {
+          positive: 'The feedback fraction β = R1/(R1+R2) sets what portion of the output voltage aids the non-inverting input.',
+          analogy: 'Imagine a mechanical toggle light switch with a firm spring—you have to push it past the center click point before it snaps to the other side.',
+          frequency: 'The maximum switching speed is limited by the op-amp slew rate (dV/dt). If the frequency is too high, the output trapezoid cannot reach full ±V_sat.'
+        }
+      },
+      {
+        id: 'block-3',
+        page: 2,
+        sectionTitle: '3. First-Order RC Low-Pass Filter & Cutoff Frequency',
+        pdfContent: 'An RC Low-Pass Filter passes low-frequency signals while attenuating frequencies above its -3 dB cutoff frequency f_c. Because capacitive reactance X_C = 1 / (2πfC) decreases inversely with frequency, the capacitor acts like an open circuit at DC and a short circuit at very high frequencies.',
+        formula: 'H(jω) = 1 / (1 + jωRC)   |   f_c = 1 / (2π · R · C)',
+        diagramType: 'rc_filter',
+        conceptFocus: 'Frequency-dependent voltage divider: capacitor shunts fast wiggles to ground.',
+        depthScripts: {
+          1: 'Quick mental model: treat this RC circuit as a frequency-dependent voltage divider where the capacitor acts like an open wire at DC and a short to ground at high frequency.',
+          2: 'As you scan the formula, remember that at the cutoff frequency f c, capacitive reactance equals resistance R, dropping the voltage gain to 0.707 (minus 3 dB) with a 45-degree phase lag.',
+          3: 'While you read Section 3, don’t memorize the transfer function blindly—just see it as a simple impedance divider Z C over R plus Z C. Because a capacitor takes time to charge through R, slow waves pass right through to V out, whereas rapid high-frequency oscillations get drained to ground before the capacitor voltage can build up.',
+          4: 'Picture a car suspension driving over both a gentle hill and a rough washboard road. The slow hill moves the whole car smoothly up and down, just like low frequencies passing to V out. The rapid washboard bumps get absorbed by the shock absorber before shaking the cabin, just like C shunting high-frequency noise.',
+          5: 'From a Laplace s-domain perspective, replacing j omega with s reveals a single left-half-plane pole at s equals minus 1 over R C. Notice how the denominator term j omega R C governs both magnitude roll-off at minus 20 dB per decade and phase rotation approaching minus 90 degrees at high frequencies.'
+        },
+        teacherScript: 'While you read Section 3, don’t memorize the transfer function blindly—just see it as a simple impedance divider Z C over R plus Z C. Because a capacitor takes time to charge through R, slow waves pass right through to V out, whereas rapid high-frequency oscillations get drained to ground before the capacitor voltage can build up.',
+        doubtKnowledge: {
+          positive: 'This passive RC stage has no active feedback loop; its pole is set purely by the time constant τ = R·C.',
+          analogy: 'Think of a shock absorber in a car suspension: slow hills move the car body smoothly up and down, while fast washboard road bumps get absorbed before shaking the cabin.',
+          frequency: 'At very high frequency (ω >> 1/RC), capacitive reactance X_C approaches 0 Ω, shunting high-frequency signals directly to ground and introducing a -90° phase lag.'
+        }
+      },
+      {
+        id: 'block-4',
+        page: 2,
+        sectionTitle: '4. Inverting Summing Amplifier & Offset Nulling',
+        pdfContent: 'By holding the inverting input node at virtual ground (V− ≈ 0 V via negative feedback), multiple input currents I_1 = V_1/R_1, I_2 = V_2/R_2 sum linearly at the node without cross-talk, flowing through the feedback resistor R_f.',
+        formula: 'V_out = -R_f · (V_1 / R_1 + V_2 / R_2 + ... + V_n / R_n)',
+        diagramType: 'summing',
+        conceptFocus: 'Virtual ground isolates input channels so currents add by KCL without cross-talk.',
+        depthScripts: {
+          1: 'Key insight here: virtual ground at V minus keeps every input channel completely isolated, so KCL forces all input currents through R f to create a weighted sum.',
+          2: 'Notice the minus sign and ratios in the formula: each channel has its own independent gain minus R f over R i because the summing node is pinned at 0 volts.',
+          3: 'As you read Section 4, ask yourself: why don’t the different audio or sensor inputs leak into each other? Because negative feedback pins the inverting node at zero volts! Each input resistor only sees ground on the other side, so its current depends strictly on its own voltage.',
+          4: 'Think of virtual ground like pressing the Tare button on a digital kitchen scale, or pouring several tributaries into a river locked at sea level. Each channel dumps its current into the node independently, and the op-amp immediately pulls that exact total current through R f.',
+          5: 'Digging deeper into non-idealities: because no input current enters the ideal op-amp terminal, KCL at the summing junction is exact. However, in real hardware, input bias currents and input offset voltage V OS also get multiplied by the noise gain (1 + R f / R parallel), which is why offset-null pins or a balancing resistor at V plus are needed.'
+        },
+        teacherScript: 'As you read Section 4, ask yourself: why don’t the different audio or sensor inputs leak into each other? Because negative feedback pins the inverting node at zero volts! Each input resistor only sees ground on the other side, so its current depends strictly on its own voltage.',
+        doubtKnowledge: {
+          positive: 'Here we use negative feedback (to V−) rather than positive feedback so the op-amp stays in its linear amplification region instead of saturating.',
+          analogy: 'Virtual ground is like tare-zeroing a digital kitchen scale—each ingredient you pour in adds weight linearly to the total readout without changing how previous ingredients weighed.',
+          frequency: 'At high frequencies, the op-amp Gain-Bandwidth Product (GBWP) causes the open-loop gain A_OL to drop, making the virtual ground less ideal.'
+        }
+      },
+      {
+        id: 'block-5',
+        page: 3,
+        sectionTitle: '5. Coupled Harmonic Oscillators & Normal Mode Frequencies',
+        pdfContent: 'When two identical pendulums or masses (m) of natural frequency ω_0 are joined by a coupling spring of stiffness k_c, energy exchanges periodically between them (beats). Any motion is a superposition of two independent normal modes: the Symmetric In-Phase Mode (ω_1) and Antisymmetric Out-of-Phase Mode (ω_2).',
+        formula: 'ω_1 = √(g / L)   (In-Phase)   |   ω_2 = √(g / L + 2·k_c / m)   (Out-of-Phase)',
+        diagramType: 'coupled',
+        conceptFocus: 'Normal modes decouple the system: in-phase ignores the spring; out-of-phase doubles spring restoring force.',
+        depthScripts: {
+          1: 'Fast intuition: in-phase motion never stretches the middle spring (so frequency stays omega 1), while opposite motion compresses it from both ends (adding 2 k c over m).',
+          2: 'When reading these two mode equations, notice the factor of 2 in front of k c: when both masses move toward each other by distance x, the coupling spring compresses by 2x.',
+          3: 'While you read Section 5, here is the secret to solving any coupled oscillator problem: instead of tracking messy beats where energy sloshes back and forth, break the motion into its two pure symmetry modes. In the first mode they swing together; in the second they mirror each other.',
+          4: 'Imagine two friends on playground swings holding a stretchy rubber band between their hands. If they swing forward and back in exact lockstep, the band stays slack as if it weren’t there. If they swing in opposite directions, the band pulls both of them back harder, making them oscillate faster.',
+          5: 'From the eigenvalue matrix of the coupled differential equations, diagonalizing the stiffness matrix yields eigenvectors (1, 1) and (1, -1). If you pull only one pendulum back and release it, you excite an equal 50-50 sum of both normal modes, and their frequency difference omega 2 minus omega 1 produces the slow beat envelope.'
+        },
+        teacherScript: 'While you read Section 5, here is the secret to solving any coupled oscillator problem: instead of tracking messy beats where energy sloshes back and forth, break the motion into its two pure symmetry modes. In the first mode they swing together; in the second they mirror each other.',
+        doubtKnowledge: {
+          positive: 'Coupling creates frequency splitting (ω_2 > ω_1). The beat frequency at which energy sloshes back and forth between the two pendulums is f_beat = (ω_2 - ω_1) / 2π.',
+          analogy: 'Imagine two people swinging side-by-side holding a stretchy rubber band between their hands: if they swing together in lockstep, the band stays slack; if they swing opposite, the band pulls them back faster.',
+          frequency: 'Stronger coupling stiffness k_c increases the high-frequency antisymmetric mode ω_2 while leaving the symmetric mode ω_1 completely unchanged.'
+        }
+      },
+      {
+        id: 'block-6',
+        page: 3,
+        sectionTitle: '6. Vector Line Integrals & Green’s Theorem Verification',
+        pdfContent: 'Green’s Theorem relates the counterclockwise line integral of a vector field F = (P, Q) around a simple closed boundary curve C to the double integral of the 2D curl (∂Q/∂x − ∂P/∂y) over the enclosed planar region D. If curl F ≠ 0, line integrals between two points depend on the path taken.',
+        formula: '∮_C (P dx + Q dy) = ∬_D ( ∂Q/∂x − ∂P/∂y ) dA',
+        diagramType: 'greens',
+        conceptFocus: 'Microscopic interior swirl (2D curl) adds up to macroscopic boundary circulation.',
+        depthScripts: {
+          1: 'Core takeaway: instead of integrating along multiple boundary segments, check the 2D curl dQ/dx minus dP/dy—if it’s zero, the field is conservative and path-independent.',
+          2: 'As you read this formula, remember the sign convention: the boundary C must be traversed counterclockwise so the enclosed region D always stays on your left.',
+          3: 'While you read Section 6, think of Green’s Theorem as the 2D version of the fundamental theorem of calculus. Rather than computing tedious line integrals along three or four separate boundary curves, you just integrate the local rotation—the 2D curl—across the flat area inside.',
+          4: 'Picture placing hundreds of tiny paddlewheels inside a pond. Adjacent interior paddlewheels cancel each other out where their blades touch, so summing the spin of every paddlewheel inside the pond equals the net water circulation flowing around the outer shoreline.',
+          5: 'In exam problems where they ask whether a line integral between (0,0) and (1,1) is path-independent, immediately test whether dQ/dx equals dP/dy. Whenever curl F is non-zero, no scalar potential function exists, meaning different paths yield different work values, and Green’s Theorem measures the exact loop difference.'
+        },
+        teacherScript: 'While you read Section 6, think of Green’s Theorem as the 2D version of the fundamental theorem of calculus. Rather than computing tedious line integrals along three or four separate boundary curves, you just integrate the local rotation—the 2D curl—across the flat area inside.',
+        doubtKnowledge: {
+          positive: 'To orient the outward unit normal on a closed curve r(t) = (x(t), y(t)) traversed counterclockwise, rotate the tangent vector (dx, dy) clockwise by 90° to get n_out = (dy, -dx) / ds.',
+          analogy: 'Think of placing tiny paddlewheels everywhere inside a pond: adding up the spin of every interior paddlewheel equals the net water flow circulating around the outer shoreline.',
+          frequency: 'In electromagnetics, Faraday’s Law ∮ E·dl = -dΦ_B/dt is a direct physical realization of Stokes’ and Green’s theorem where time-varying magnetic flux acts as the curl source.'
+        }
+      }
+    ];
+
+    // =========================================================================
+    // APPLICATION STATE
+    // =========================================================================
+    const state = {
+      blocks: [...DEFAULT_LECTURE_BLOCKS],
+      currentIndex: 0,
+      botMode: 'IDLE', // 'IDLE' | 'TEACHING' | 'DOUBT_MODE' | 'PAUSED_WAITING'
+      autoScrollEnabled: true,
+      userScrollOverride: false,
+      isProgrammaticScroll: false,
+      cooldownSeconds: 6,
+      cooldownRemaining: 0,
+      cooldownIntervalId: null,
+      speechRate: 1.0,
+      selectedVoiceURI: '',
+      micListening: false,
+      recognition: null,
+      pauseSecondsElapsed: 0,
+      pauseTimerIntervalId: null,
+      geminiApiKey: '',
+      activeSpeakingTimeoutId: null,
+      explanationDepth: 3, // 1 = High Efficiency ... 5 = High Depth
+      currentlySpokenText: ''
+    };
+
+    // =========================================================================
+    // INITIALIZATION
+    // =========================================================================
+    window.addEventListener('DOMContentLoaded', () => {
+      loadSavedSettings();
+      renderLectureBlocks();
+      setupScrollPriorityArbiter();
+      setupSpeechSynthesisVoices();
+      setupSpeechRecognition();
+      updateAllUI();
+    });
+
+    function loadSavedSettings() {
+      try {
+        const savedKey = localStorage.getItem('lectura_gemini_key');
+        if (savedKey) {
+          state.geminiApiKey = savedKey;
+          const input = document.getElementById('geminiApiKeyInput');
+          if (input) input.value = savedKey;
+        }
+      } catch (e) {
+        // Ignore storage errors in sandboxed context
+      }
+    }
+
+    function saveSettings() {
+      const input = document.getElementById('geminiApiKeyInput');
+      if (input) {
+        state.geminiApiKey = input.value.trim();
+        try {
+          localStorage.setItem('lectura_gemini_key', state.geminiApiKey);
+        } catch (e) {}
+      }
+      toggleSettingsModal(false);
+      showToast('Voice and AI Teacher settings saved.', 'indigo');
+    }
+
+    function toggleSettingsModal(show) {
+      const modal = document.getElementById('settingsModal');
+      if (!modal) return;
+      if (show) {
+        modal.classList.remove('hidden');
+      } else {
+        modal.classList.add('hidden');
+      }
+    }
+
+    function switchMainView(view) {
+      const ws = document.getElementById('workspaceView');
+      const bp = document.getElementById('blueprintView');
+      const btnWs = document.getElementById('tabWorkspaceBtn');
+      const btnBp = document.getElementById('tabBlueprintBtn');
+      if (view === 'blueprint') {
+        ws.classList.add('hidden');
+        bp.classList.remove('hidden');
+        btnBp.className = 'px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-600 text-white transition';
+        btnWs.className = 'px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition';
+      } else {
+        bp.classList.add('hidden');
+        ws.classList.remove('hidden');
+        btnWs.className = 'px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-600 text-white transition';
+        btnBp.className = 'px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition';
+      }
+    }
+
+    function copyBlueprintCode() {
+      const codeEl = document.getElementById('blueprintCodeBlock');
+      if (!codeEl) return;
+      const text = codeEl.innerText;
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+        showToast('Core Priority Scroll & Voice Arbiter code copied!', 'emerald');
+      } catch (e) {
+        showToast('Unable to copy automatically; select the text manually.', 'amber');
+      }
+      document.body.removeChild(ta);
+    }
+
+    // =========================================================================
+    // RENDER LECTURE / PDF BLOCKS WITH INLINE SVG DIAGRAMS
+    // =========================================================================
+    function getDiagramSvg(type) {
+      if (type === 'schmitt') {
+        return `<svg viewBox="0 0 420 110" class="w-full h-24 bg-slate-950/80 rounded-lg border border-slate-800 p-2">
+          <line x1="25" y1="45" x2="110" y2="45" stroke="#94a3b8" stroke-width="2"/>
+          <circle cx="25" cy="45" r="3" fill="#38bdf8"/>
+          <text x="15" y="33" fill="#38bdf8" font-size="10">V_in</text>
+          <polygon points="110,20 110,90 185,55" fill="#1e293b" stroke="#6366f1" stroke-width="2"/>
+          <text x="118" y="48" fill="#f87171" font-size="12" font-weight="bold">−</text>
+          <text x="118" y="70" fill="#34d399" font-size="12" font-weight="bold">+</text>
+          <line x1="85" y1="68" x2="110" y2="68" stroke="#34d399" stroke-width="2"/>
+          <line x1="85" y1="68" x2="85" y2="96" stroke="#34d399" stroke-width="2"/>
+          <line x1="85" y1="96" x2="225" y2="96" stroke="#34d399" stroke-width="2"/>
+          <rect x="135" y="90" width="36" height="12" fill="#0f172a" stroke="#34d399" stroke-width="1.5"/>
+          <text x="145" y="86" fill="#34d399" font-size="9">R2 (Feedback)</text>
+          <line x1="185" y1="55" x2="265" y2="55" stroke="#e2e8f0" stroke-width="2"/>
+          <line x1="225" y1="55" x2="225" y2="96" stroke="#34d399" stroke-width="2"/>
+          <text x="272" y="58" fill="#a5b4fc" font-size="10" font-weight="bold">V_out (±V_sat)</text>
+        </svg>`;
+      }
+      if (type === 'hysteresis') {
+        return `<svg viewBox="0 0 420 100" class="w-full h-24 bg-slate-950/80 rounded-lg border border-slate-800 p-2">
+          <line x1="60" y1="50" x2="360" y2="50" stroke="#475569" stroke-width="1" stroke-dasharray="4"/>
+          <line x1="210" y1="10" x2="210" y2="90" stroke="#475569" stroke-width="1" stroke-dasharray="4"/>
+          <polyline points="90,22 255,22 255,78 330,78" fill="none" stroke="#6366f1" stroke-width="2.5"/>
+          <polyline points="330,78 165,78 165,22 90,22" fill="none" stroke="#38bdf8" stroke-width="2.5"/>
+          <text x="150" y="93" fill="#38bdf8" font-size="10">V_LTP</text>
+          <text x="245" y="93" fill="#6366f1" font-size="10">V_UTP</text>
+          <text x="190" y="46" fill="#fbbf24" font-size="10" font-weight="bold">← ΔV_H →</text>
+        </svg>`;
+      }
+      if (type === 'rc_filter') {
+        return `<svg viewBox="0 0 420 100" class="w-full h-24 bg-slate-950/80 rounded-lg border border-slate-800 p-2">
+          <line x1="30" y1="35" x2="95" y2="35" stroke="#94a3b8" stroke-width="2"/>
+          <rect x="95" y="27" width="50" height="16" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
+          <text x="115" y="22" fill="#38bdf8" font-size="10">R</text>
+          <line x1="145" y1="35" x2="260" y2="35" stroke="#94a3b8" stroke-width="2"/>
+          <line x1="205" y1="35" x2="205" y2="55" stroke="#94a3b8" stroke-width="2"/>
+          <line x1="190" y1="55" x2="220" y2="55" stroke="#f59e0b" stroke-width="2.5"/>
+          <line x1="190" y1="63" x2="220" y2="63" stroke="#f59e0b" stroke-width="2.5"/>
+          <line x1="205" y1="63" x2="205" y2="85" stroke="#94a3b8" stroke-width="2"/>
+          <text x="226" y="63" fill="#f59e0b" font-size="10">C</text>
+          <text x="270" y="39" fill="#34d399" font-size="10" font-weight="bold">V_out (f_c = 1/2πRC)</text>
+        </svg>`;
+      }
+      return '';
+    }
+
+    function renderLectureBlocks() {
+      const container = document.getElementById('pdfContentContainer');
+      if (!container) return;
+
+      container.innerHTML = state.blocks.map((block, idx) => {
+        const isCurrent = idx === state.currentIndex;
+        const isDoubt = isCurrent && state.botMode === 'DOUBT_MODE';
+        const activeClass = isDoubt
+          ? 'teaching-block-doubt'
+          : (isCurrent ? 'teaching-block-active' : 'bg-slate-900/80 border-slate-800/90 hover:border-slate-700');
+
+        const svgHtml = block.diagramType ? `<div class="mt-3">${getDiagramSvg(block.diagramType)}</div>` : '';
+        const formulaHtml = block.formula
+          ? `<div class="mt-3 px-3 py-2 rounded-lg bg-slate-950 border border-indigo-500/30 font-mono-code text-xs text-indigo-300">${block.formula}</div>`
+          : '';
+
+        return `
+          <article id="pdf-block-${idx}" data-block-index="${idx}" onclick="selectAndTeachBlock(${idx})"
+            class="teaching-block cursor-pointer rounded-2xl border p-4 sm:p-5 ${activeClass}">
+            <div class="flex items-center justify-between gap-2 mb-2">
+              <div class="flex items-center gap-2">
+                <span class="px-2 py-0.5 text-[10px] font-mono-code font-semibold rounded bg-slate-800 text-slate-300">
+                  Page ${block.page || 1} • Block ${idx + 1}
+                </span>
+                <h3 class="text-sm sm:text-base font-bold text-white">${block.sectionTitle}</h3>
+              </div>
+              <span class="text-[11px] font-medium ${isCurrent ? 'text-indigo-400' : 'text-slate-500'}">
+                ${isCurrent ? (state.botMode === 'TEACHING' ? '🔊 Explaining Now' : (state.botMode === 'DOUBT_MODE' ? '❓ Clearing Doubt' : '📍 Active Focus')) : 'Click to Teach'}
+              </span>
+            </div>
+            <div class="mb-2 flex items-center gap-2">
+              <span class="px-2 py-0.5 text-[10px] font-semibold rounded bg-slate-800/90 text-slate-400 border border-slate-700/70">👁️ PDF Passage (Read at Your Pace)</span>
+              ${block.conceptFocus ? `<span class="px-2 py-0.5 text-[10px] font-medium rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 truncate">💡 Takeaway: ${escapeHtml(block.conceptFocus)}</span>` : ''}
+            </div>
+            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">${block.pdfContent}</p>
+            ${formulaHtml}
+            ${svgHtml}
+          </article>
+        `;
+      }).join('');
+    }
+
+    // =========================================================================
+    // PRIORITY SCROLL ARBITER (HUMAN SCROLL ALWAYS HAS PRIORITY OVER BOT)
+    // =========================================================================
+    function setupScrollPriorityArbiter() {
+      const viewport = document.getElementById('pdfViewport');
+      if (!viewport) return;
+
+      const handleHumanScrollIntent = () => {
+        if (state.isProgrammaticScroll) return;
+        activateUserScrollPriority();
+      };
+
+      viewport.addEventListener('wheel', handleHumanScrollIntent, { passive: true });
+      viewport.addEventListener('touchstart', handleHumanScrollIntent, { passive: true });
+      viewport.addEventListener('touchmove', handleHumanScrollIntent, { passive: true });
+      viewport.addEventListener('mousedown', (e) => {
+        // Detect scrollbar drag on the right edge of viewport
+        const rect = viewport.getBoundingClientRect();
+        if (e.clientX >= rect.right - 16) {
+          handleHumanScrollIntent();
+        }
+      });
+
+      window.addEventListener('keydown', (e) => {
+        if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown'].includes(e.key) && document.activeElement?.tagName !== 'INPUT') {
+          handleHumanScrollIntent();
+        }
+      });
+    }
+
+    function activateUserScrollPriority() {
+      state.userScrollOverride = true;
+      state.cooldownRemaining = state.cooldownSeconds;
+
+      clearInterval(state.cooldownIntervalId);
+      if (state.cooldownSeconds < 900) {
+        state.cooldownIntervalId = setInterval(() => {
+          state.cooldownRemaining -= 1;
+          if (state.cooldownRemaining <= 0) {
+            clearInterval(state.cooldownIntervalId);
+            state.userScrollOverride = false;
+          }
+          updateScrollPriorityUI();
+        }, 1000);
+      }
+      updateScrollPriorityUI();
+    }
+
+    function forceReturnScrollToBot() {
+      clearInterval(state.cooldownIntervalId);
+      state.userScrollOverride = false;
+      state.cooldownRemaining = 0;
+      updateScrollPriorityUI();
+      botScrollToBlock(state.currentIndex, true);
+      showToast('Bot Auto-Scroll re-synced to active teacher section.', 'emerald');
+    }
+
+    function teachFromVisibleViewport() {
+      const viewport = document.getElementById('pdfViewport');
+      if (!viewport) return;
+      const vpRect = viewport.getBoundingClientRect();
+      const vpCenterY = vpRect.top + vpRect.height / 2;
+
+      let closestIdx = state.currentIndex;
+      let minDistance = Infinity;
+
+      state.blocks.forEach((_, idx) => {
+        const el = document.getElementById(`pdf-block-${idx}`);
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          const blockCenterY = rect.top + rect.height / 2;
+          const dist = Math.abs(blockCenterY - vpCenterY);
+          if (dist < minDistance) {
+            minDistance = dist;
+            closestIdx = idx;
+          }
+        }
+      });
+
+      clearInterval(state.cooldownIntervalId);
+      state.userScrollOverride = false;
+      state.currentIndex = closestIdx;
+      updateScrollPriorityUI();
+      startTeachingCurrentBlock();
+      showToast(`Jumped teacher to Section ${closestIdx + 1} on your screen!`, 'indigo');
+    }
+
+    function botScrollToBlock(index, forceEvenIfIdle = false) {
+      if (!state.autoScrollEnabled && !forceEvenIfIdle) return false;
+      if (state.userScrollOverride && !forceEvenIfIdle) {
+        // User has priority! Never hijack scroll while user is scrolling.
+        return false;
+      }
+      const targetEl = document.getElementById(`pdf-block-${index}`);
+      if (!targetEl) return false;
+
+      state.isProgrammaticScroll = true;
+      targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setTimeout(() => {
+        state.isProgrammaticScroll = false;
+      }, 650);
+      return true;
+    }
+
+    function toggleAutoScrollEnabled(checked) {
+      state.autoScrollEnabled = checked;
+      updateScrollPriorityUI();
+    }
+
+    function updateCooldownDuration(val) {
+      state.cooldownSeconds = parseInt(val, 10) || 6;
+    }
+
+    // =========================================================================
+    // LIVE TEACHER SPEECH SYNTHESIS & PLAYBACK LOOP
+    // =========================================================================
+    function setupSpeechSynthesisVoices() {
+      if (!('speechSynthesis' in window)) return;
+      const populateVoices = () => {
+        const voices = window.speechSynthesis.getVoices();
+        const select = document.getElementById('voiceSelectDropdown');
+        if (!select || !voices.length) return;
+        select.innerHTML = voices
+          .map((v) => `<option value="${v.voiceURI}" ${v.lang.startsWith('en') && !state.selectedVoiceURI ? 'selected' : ''}>${v.name} (${v.lang})</option>`)
+          .join('');
+        if (!state.selectedVoiceURI) {
+          const preferred = voices.find((v) => v.lang.startsWith('en') && (v.name.includes('Natural') || v.name.includes('Google') || v.default)) || voices[0];
+          if (preferred) state.selectedVoiceURI = preferred.voiceURI;
+        }
+      };
+      populateVoices();
+      window.speechSynthesis.onvoiceschanged = populateVoices;
+    }
+
+    function handleVoiceSelectionChange(uri) {
+      state.selectedVoiceURI = uri;
+    }
+
+    function updateSpeechRate(val) {
+      state.speechRate = parseFloat(val) || 1.0;
+      if (state.botMode === 'TEACHING') {
+        startTeachingCurrentBlock();
+      }
+    }
+
+    function toggleTeachingPlayback() {
+      if (state.botMode === 'TEACHING') {
+        enterPausedWaitingMode('Manual pause button clicked');
+      } else {
+        resumeTeachingMode();
+      }
+    }
+
+    function selectAndTeachBlock(idx) {
+      state.currentIndex = idx;
+      startTeachingCurrentBlock();
+    }
+
+    function stepBlock(delta) {
+      const next = Math.max(0, Math.min(state.blocks.length - 1, state.currentIndex + delta));
+      state.currentIndex = next;
+      if (state.botMode === 'TEACHING') {
+        startTeachingCurrentBlock();
+      } else {
+        renderLectureBlocks();
+        botScrollToBlock(state.currentIndex);
+        updateAllUI();
+      }
+    }
+
+    const DEPTH_LEVEL_METADATA = {
+      1: {
+        label: '1 / 5 • High Efficiency (TL;DR)',
+        badgeClass: 'px-2 py-0.5 text-[10px] font-semibold rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/40',
+        desc: 'Ultra-crisp 1-sentence takeaway + key formula for rapid exam revision.'
+      },
+      2: {
+        label: '2 / 5 • Concise Overview',
+        badgeClass: 'px-2 py-0.5 text-[10px] font-semibold rounded-md bg-teal-500/20 text-teal-300 border border-teal-500/40',
+        desc: 'Brisk 2-sentence explanation covering the core definition and governing equation.'
+      },
+      3: {
+        label: '3 / 5 • Balanced Classroom',
+        badgeClass: 'px-2 py-0.5 text-[10px] font-semibold rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/40',
+        desc: 'Explains core concepts, formulas, and how each stage operates at a natural lecture pace.'
+      },
+      4: {
+        label: '4 / 5 • Detailed Analytical',
+        badgeClass: 'px-2 py-0.5 text-[10px] font-semibold rounded-md bg-violet-500/20 text-violet-300 border border-violet-500/40',
+        desc: 'Adds physical intuition, real-world analogies, and frequency/boundary behavior.'
+      },
+      5: {
+        label: '5 / 5 • High Depth (First-Principles)',
+        badgeClass: 'px-2 py-0.5 text-[10px] font-semibold rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40',
+        desc: 'Full deep-dive lecture: physical mechanism, mathematical derivation context, limiting cases, and analogies.'
+      }
+    };
+
+    function setDepthPreset(level) {
+      const slider = document.getElementById('explanationDepthSlider');
+      if (slider) slider.value = String(level);
+      updateExplanationDepth(level);
+    }
+
+    function updateExplanationDepth(val) {
+      const level = Math.max(1, Math.min(5, parseInt(val, 10) || 3));
+      state.explanationDepth = level;
+      const mainSlider = document.getElementById('explanationDepthSlider');
+      if (mainSlider && mainSlider.value !== String(level)) mainSlider.value = String(level);
+      const dockSlider = document.getElementById('dockDepthSlider');
+      if (dockSlider && dockSlider.value !== String(level)) dockSlider.value = String(level);
+      const dockVal = document.getElementById('dockDepthValue');
+      if (dockVal) dockVal.textContent = `${level}/5`;
+      const meta = DEPTH_LEVEL_METADATA[level];
+      const badge = document.getElementById('depthModeBadge');
+      const desc = document.getElementById('depthModeDescription');
+      if (badge && meta) {
+        badge.textContent = meta.label;
+        badge.className = meta.badgeClass;
+      }
+      if (desc && meta) {
+        desc.textContent = meta.desc;
+      }
+
+      const block = state.blocks[state.currentIndex];
+      if (block) {
+        const script = buildExplanationForDepth(block, state.explanationDepth);
+        const transcriptEl = document.getElementById('liveTeacherTranscript');
+        if (transcriptEl && state.botMode !== 'DOUBT_MODE') {
+          transcriptEl.textContent = script;
+        }
+      }
+
+      if (state.botMode === 'TEACHING') {
+        startTeachingCurrentBlock();
+      }
+    }
+
+    function buildExplanationForDepth(block, depth) {
+      if (!block) return '';
+      const level = Math.max(1, Math.min(5, parseInt(depth, 10) || 3));
+
+      // If block has pre-built or synthesized non-verbatim depthScripts, use them directly!
+      if (block.depthScripts && block.depthScripts[level]) {
+        return block.depthScripts[level];
+      }
+
+      // Synthesize non-verbatim pedagogical explanation on the fly if missing
+      const synth = synthesizePedagogicalLayerForText(block.pdfContent || '', block.sectionTitle || 'this section');
+      block.depthScripts = synth.depthScripts;
+      block.conceptFocus = block.conceptFocus || synth.conceptFocus;
+      return block.depthScripts[level];
+    }
+
+    // PEDAGOGICAL CONCEPT SYNTHESIZER: Never reads the PDF text verbatim; unpacks concepts, relationships & mental models
+    function synthesizePedagogicalLayerForText(rawText, sectionLabel) {
+      const clean = (rawText || '').replace(/\s+/g, ' ').trim();
+      const words = clean.split(/\s+/);
+
+      // Extract technical/domain terms (capitalized terms, hyphenated terms, or long domain words)
+      const stopWords = new Set(['however', 'therefore', 'because', 'whereas', 'between', 'through', 'without', 'another', 'section', 'chapter', 'example', 'consider', 'following', 'defined', 'function', 'system']);
+      const keyTerms = [];
+      words.forEach((w) => {
+        const stripped = w.replace(/[^a-zA-Z0-9_-]/g, '');
+        if (stripped.length >= 6 && !stopWords.has(stripped.toLowerCase()) && !keyTerms.includes(stripped)) {
+          keyTerms.push(stripped);
+        }
+      });
+      const topTerms = keyTerms.slice(0, 4);
+      const termsPhrase = topTerms.length >= 2
+        ? `${topTerms.slice(0, -1).join(', ')} and ${topTerms[topTerms.length - 1]}`
+        : (topTerms[0] || 'the core variables');
+
+      // Detect mathematical relationships or causal cues in the PDF block
+      const hasEquation = /[=≈∝±∫∮∑√<>]|\b(ratio|proportional|inverse|product|sum|derivative|integral|rate|frequency|threshold|voltage|current|force|energy)\b/i.test(clean);
+      const hasContrast = /\b(unlike|whereas|however|instead|contrast|while|versus)\b/i.test(clean);
+      const hasCausal = /\b(because|therefore|thus|causes|leads to|results in|consequently|forces|prevents)\b/i.test(clean);
+
+      const roleDescription = hasContrast
+        ? 'contrasts two competing behaviors so you can see why the design choice works'
+        : (hasCausal
+          ? 'traces the cause-and-effect chain linking the input condition to the final system response'
+          : (hasEquation
+            ? 'establishes the quantitative scaling law governing how the parameters interact'
+            : 'lays out the structural foundation and operating assumptions for this topic'));
+
+      const conceptFocus = `How ${termsPhrase} interact (${hasEquation ? 'Quantitative Scaling' : 'Conceptual Mechanism'})`;
+
+      const depthScripts = {
+        1: `High-efficiency takeaway while you scan ${sectionLabel}: focus on how ${termsPhrase} govern the outcome—this passage ${roleDescription}.`,
+        2: `As your eyes read ${sectionLabel}, look specifically at the relationship between ${termsPhrase}. Ask yourself what happens to the output if you double or halve the primary parameter here.`,
+        3: `While you read ${sectionLabel} on screen, let's unpack the intuition behind it rather than just reading the words. This passage ${roleDescription}. Notice how ${termsPhrase} act as the control knobs that determine the system's behavior.`,
+        4: `Let's connect ${sectionLabel} to physical intuition while you read the text. Think of ${termsPhrase} like interconnected levers in a physical mechanism: shifting one forces the others to rebalance. Pay special attention to the boundary conditions implied in this paragraph.`,
+        5: `Deep-dive commentary on ${sectionLabel}: from first principles, this section ${roleDescription}. As you read the exact wording on screen, examine the underlying assumptions linking ${termsPhrase}, test the limiting cases at zero and infinity, and note how this step feeds into downstream derivations.`
+      };
+
+      const doubtKnowledge = {
+        positive: `The underlying mechanism in ${sectionLabel} centers on how ${termsPhrase} constrain one another: changing the driving parameter forces the system to re-establish equilibrium.`,
+        analogy: `Think of the interaction between ${termsPhrase} like tuning the tension and damping on a physical instrument string—one sets the threshold or scale while the other controls the response speed.`,
+        frequency: `At extreme or high-frequency operating limits in ${sectionLabel}, always check which term among ${termsPhrase} dominates the denominator or rate of change.`
+      };
+
+      return { conceptFocus, depthScripts, doubtKnowledge };
+    }
+
+    // Optional live Gemini API Professor Commentary Generator (when API key is provided)
+    async function enrichBlockWithGeminiCommentary(block) {
+      if (!state.geminiApiKey || !block || block._geminiEnriched) return;
+      block._geminiEnriched = true;
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(state.geminiApiKey)}`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{
+              parts: [{
+                text: `The student is reading this PDF passage on their screen right now: "${block.pdfContent}". DO NOT read or repeat the text verbatim. Act as a live professor standing beside their screen and write a spoken explanation (Depth Level ${state.explanationDepth} out of 5, where 1=ultra-concise 1-sentence intuition and 5=deep first-principles derivation & analogy) that explains WHY this works, what mental model to build, and what to pay attention to in the passage.`
+              }]
+            }]
+          })
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const generated = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+        if (generated) {
+          block.depthScripts = block.depthScripts || {};
+          block.depthScripts[state.explanationDepth] = generated;
+          if (state.blocks[state.currentIndex]?.id === block.id && state.botMode === 'TEACHING') {
+            document.getElementById('liveTeacherTranscript').textContent = generated;
+          }
+        }
+      } catch (e) {}
+    }
+
+    function startTeachingCurrentBlock() {
+      stopPauseTimer();
+      clearTimeout(state.activeSpeakingTimeoutId);
+      state.botMode = 'TEACHING';
+      const block = state.blocks[state.currentIndex];
+      if (!block) return;
+
+      if (state.geminiApiKey && !block._geminiEnriched) {
+        enrichBlockWithGeminiCommentary(block);
+      }
+      const activeScript = buildExplanationForDepth(block, state.explanationDepth);
+
+      renderLectureBlocks();
+      updateAllUI();
+      botScrollToBlock(state.currentIndex);
+
+      speakText(activeScript, () => {
+        // When finished explaining current block, automatically advance & scroll if still in TEACHING mode
+        if (state.botMode === 'TEACHING') {
+          if (state.currentIndex < state.blocks.length - 1) {
+            state.activeSpeakingTimeoutId = setTimeout(() => {
+              if (state.botMode === 'TEACHING') {
+                state.currentIndex += 1;
+                startTeachingCurrentBlock();
+              }
+            }, 900);
+          } else {
+            state.botMode = 'IDLE';
+            updateAllUI();
+            showToast('Completed explaining all sections of the document!', 'emerald');
+          }
+        }
+      });
+    }
+
+    function speakText(text, onComplete) {
+      clearTimeout(state.activeSpeakingTimeoutId);
+      state.currentlySpokenText = (text || '').toLowerCase();
+      if ('speechSynthesis' in window) {
+        try {
+          window.speechSynthesis.cancel();
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.rate = state.speechRate;
+          const voices = window.speechSynthesis.getVoices();
+          const chosen = voices.find((v) => v.voiceURI === state.selectedVoiceURI);
+          if (chosen) utterance.voice = chosen;
+
+          utterance.onend = () => {
+            if (onComplete) onComplete();
+          };
+          utterance.onerror = () => {
+            // Fallback timer if browser blocks or interrupts TTS
+          };
+          window.speechSynthesis.speak(utterance);
+        } catch (e) {}
+      }
+
+      // Deterministic fallback timer in case headless/sandbox browser has muted audio output
+      const wordCount = text.split(/\s+/).length;
+      const durationMs = Math.max(3500, Math.round((wordCount / (2.7 * state.speechRate)) * 1000));
+      state.activeSpeakingTimeoutId = setTimeout(() => {
+        if (onComplete) onComplete();
+      }, durationMs);
+    }
+
+    function stopAllSpeech() {
+      clearTimeout(state.activeSpeakingTimeoutId);
+      if ('speechSynthesis' in window) {
+        try {
+          window.speechSynthesis.cancel();
+        } catch (e) {}
+      }
+    }
+
+    // =========================================================================
+    // ACTIVE LISTENING & WAKE-WORD STATE MACHINE ("doubt", "give me a minute", "continue")
+    // =========================================================================
+    function setupSpeechRecognition() {
+      const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRec) {
+        const badge = document.getElementById('micStatusBadge');
+        if (badge) {
+          badge.textContent = 'SIMULATOR READY';
+          badge.className = 'px-2 py-0.5 text-[10px] font-semibold rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30';
+        }
+        return;
+      }
+
+      const recognition = new SpeechRec();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      recognition.onstart = () => {
+        state.micListening = true;
+        updateMicUI();
+      };
+
+      recognition.onresult = (event) => {
+        let interim = '';
+        let finalTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const piece = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += piece;
+          } else {
+            interim += piece;
+          }
+        }
+        const combined = (finalTranscript || interim).trim();
+        if (combined) {
+          const heardEl = document.getElementById('liveHeardTranscript');
+          if (heardEl) heardEl.textContent = `"${combined}"`;
+          inspectTranscriptForCommands(combined, Boolean(finalTranscript));
+        }
+      };
+
+      recognition.onerror = () => {
+        // Gracefully handle mic permission denial in sandboxed iframe
+        state.micListening = false;
+        updateMicUI();
+      };
+
+      recognition.onend = () => {
+        if (state.micListening) {
+          try {
+            recognition.start();
+          } catch (e) {}
+        }
+      };
+
+      state.recognition = recognition;
+      try {
+        recognition.start();
+      } catch (e) {}
+    }
+
+    function toggleMicrophoneListening() {
+      if (!state.recognition) {
+        showToast('Browser voice recognition uses the simulator buttons in this preview.', 'indigo');
+        return;
+      }
+      if (state.micListening) {
+        state.micListening = false;
+        try { state.recognition.stop(); } catch (e) {}
+        showToast('Microphone active listening paused.', 'amber');
+      } else {
+        state.micListening = true;
+        try { state.recognition.start(); } catch (e) {}
+        showToast('Microphone active listening enabled! Say "doubt", "give me a minute", or "continue".', 'emerald');
+      }
+      updateMicUI();
+    }
+
+    function inspectTranscriptForCommands(transcript, isFinal) {
+      const lower = transcript.toLowerCase().trim();
+
+      // Echo-suppression guard: if the mic hears a 4+ word phrase that is verbatim inside the bot's currently spoken script
+      // and doesn't contain an explicit wake command, ignore speaker bleed-through.
+      const hasWakeWord = /\b(doubt|give me a minute|hold on|pause|continue|go ahead|resume)\b/.test(lower);
+      if (!hasWakeWord && state.botMode === 'TEACHING' && lower.split(/\s+/).length >= 3 && state.currentlySpokenText.includes(lower)) {
+        return;
+      }
+
+      if (/\b(doubt|i have a doubt|wait a doubt|question)\b/.test(lower)) {
+        triggerVoiceCommand('doubt', transcript);
+        return;
+      }
+      if (/\b(give me a minute|hold on|wait a minute|one minute|pause)\b/.test(lower)) {
+        triggerVoiceCommand('give me a minute', transcript);
+        return;
+      }
+      if (/\b(continue|go ahead|resume|keep going|carry on)\b/.test(lower)) {
+        triggerVoiceCommand('continue', transcript);
+        return;
+      }
+
+      // If already in DOUBT_MODE and user finishes speaking a question
+      if (state.botMode === 'DOUBT_MODE' && isFinal && transcript.trim().split(/\s+/).length >= 3) {
+        submitStudentDoubt(transcript.trim());
+      }
+    }
+
+    function triggerVoiceCommand(commandKey, rawHeardText) {
+      playFeedbackChime(commandKey);
+      const heardEl = document.getElementById('liveHeardTranscript');
+      if (heardEl) heardEl.textContent = `"${rawHeardText || commandKey}"`;
+
+      const tagEl = document.getElementById('lastCommandTag');
+      if (tagEl) {
+        tagEl.textContent = commandKey.toUpperCase();
+        tagEl.className = 'px-2 py-0.5 text-[10px] font-mono-code font-bold rounded bg-indigo-500/30 text-indigo-200 border border-indigo-500/40 shrink-0';
+      }
+
+      highlightWakePill(commandKey);
+
+      if (commandKey === 'doubt') {
+        enterDoubtMode();
+      } else if (commandKey === 'give me a minute') {
+        enterPausedWaitingMode('Heard "give me a minute"');
+      } else if (commandKey === 'continue') {
+        resumeTeachingMode();
+      }
+    }
+
+    function highlightWakePill(commandKey) {
+      const map = {
+        'doubt': 'pillDoubt',
+        'give me a minute': 'pillMinute',
+        'continue': 'pillContinue'
+      };
+      const el = document.getElementById(map[commandKey]);
+      if (!el) return;
+      el.classList.add('ring-2', 'ring-indigo-400');
+      setTimeout(() => el.classList.remove('ring-2', 'ring-indigo-400'), 900);
+    }
+
+    function enterDoubtMode() {
+      stopAllSpeech();
+      stopPauseTimer();
+      state.botMode = 'DOUBT_MODE';
+      renderLectureBlocks();
+      updateAllUI();
+
+      const block = state.blocks[state.currentIndex];
+      const promptMsg = `Paused at "${block.sectionTitle}". Go ahead and ask your doubt—I'm listening!`;
+      const transcriptEl = document.getElementById('liveTeacherTranscript');
+      if (transcriptEl) transcriptEl.textContent = promptMsg;
+
+      const inputEl = document.getElementById('doubtTextInput');
+      if (inputEl) inputEl.focus();
+
+      speakText("Yes, paused! Tell me your doubt on this section.");
+      showToast('Heard "doubt" — Teacher paused & listening to your question!', 'amber');
+    }
+
+    function enterPausedWaitingMode(reason) {
+      stopAllSpeech();
+      state.botMode = 'PAUSED_WAITING';
+      startPauseTimer();
+      renderLectureBlocks();
+      updateAllUI();
+
+      const transcriptEl = document.getElementById('liveTeacherTranscript');
+      if (transcriptEl) {
+        transcriptEl.textContent = `Lecture & auto-scroll paused (${reason}). Take your time reading or scrolling—say or click "continue" whenever you are ready to resume!`;
+      }
+      showToast('Heard "give me a minute" — Lecture & auto-scroll paused.', 'sky');
+    }
+
+    function resumeTeachingMode() {
+      stopPauseTimer();
+      showToast('Heard "continue" — Resuming live explanation & auto-scroll!', 'emerald');
+      startTeachingCurrentBlock();
+    }
+
+    function startPauseTimer() {
+      stopPauseTimer();
+      state.pauseSecondsElapsed = 0;
+      const badge = document.getElementById('pauseTimerBadge');
+      if (badge) badge.classList.remove('hidden');
+      state.pauseTimerIntervalId = setInterval(() => {
+        state.pauseSecondsElapsed += 1;
+        const mins = String(Math.floor(state.pauseSecondsElapsed / 60)).padStart(2, '0');
+        const secs = String(state.pauseSecondsElapsed % 60).padStart(2, '0');
+        if (badge) badge.textContent = `Paused ${mins}:${secs}`;
+      }, 1000);
+    }
+
+    function stopPauseTimer() {
+      clearInterval(state.pauseTimerIntervalId);
+      const badge = document.getElementById('pauseTimerBadge');
+      if (badge) badge.classList.add('hidden');
+    }
+
+    // Subtle Web Audio API Synthesizer Chime for Active Listening Feedback
+    function playFeedbackChime(type) {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        if (type === 'doubt') {
+          osc.frequency.setValueAtTime(520, ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(680, ctx.currentTime + 0.14);
+        } else if (type === 'give me a minute') {
+          osc.frequency.setValueAtTime(440, ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(330, ctx.currentTime + 0.16);
+        } else {
+          osc.frequency.setValueAtTime(480, ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(760, ctx.currentTime + 0.15);
+        }
+
+        gain.gain.setValueAtTime(0.08, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.19);
+      } catch (e) {}
+    }
+
+    // =========================================================================
+    // DOUBT RESOLUTION ENGINE (CONTEXTUAL + OPTIONAL GEMINI API)
+    // =========================================================================
+    function handleDoubtFormSubmit(e) {
+      e.preventDefault();
+      const input = document.getElementById('doubtTextInput');
+      if (!input || !input.value.trim()) return;
+      const question = input.value.trim();
+      input.value = '';
+      submitStudentDoubt(question);
+    }
+
+    async function submitStudentDoubt(question) {
+      stopAllSpeech();
+      state.botMode = 'DOUBT_MODE';
+      renderLectureBlocks();
+      updateAllUI();
+
+      const block = state.blocks[state.currentIndex];
+      appendDoubtMessage('student', question, block.sectionTitle);
+
+      let answer = '';
+      if (state.geminiApiKey) {
+        answer = await fetchGeminiDoubtAnswer(question, block);
+      }
+      if (!answer) {
+        answer = synthesizeContextualDoubtAnswer(question, block);
+      }
+
+      appendDoubtMessage('teacher', answer, block.sectionTitle);
+      const transcriptEl = document.getElementById('liveTeacherTranscript');
+      if (transcriptEl) {
+        transcriptEl.textContent = `${answer} — Say or click "continue" whenever you're ready for me to keep teaching!`;
+      }
+
+      speakText(`${answer}. Does that clear up your doubt? Say continue whenever you want to move on.`);
+    }
+
+    async function fetchGeminiDoubtAnswer(question, block) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(state.geminiApiKey)}`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{
+              parts: [{
+                text: `You are a concise, friendly live engineering professor teaching a student from a PDF. Current PDF section: "${block.sectionTitle}". Content: "${block.pdfContent}". Formula: "${block.formula || 'N/A'}". Answer the student's doubt in 2-3 clear spoken sentences: "${question}"`
+              }]
+            }]
+          })
+        });
+        if (!res.ok) return '';
+        const data = await res.json();
+        return data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      } catch (e) {
+        return '';
+      }
+    }
+
+    function synthesizeContextualDoubtAnswer(question, block) {
+      const q = question.toLowerCase();
+      const dk = block.doubtKnowledge || {};
+
+      if (q.includes('analogy') || q.includes('intuitive') || q.includes('real-world') || q.includes('example')) {
+        if (dk.analogy) return dk.analogy;
+      }
+      if (q.includes('frequency') || q.includes('high') || q.includes('fast') || q.includes('speed')) {
+        if (dk.frequency) return dk.frequency;
+      }
+      if (q.includes('positive') || q.includes('feedback') || q.includes('why') || q.includes('how')) {
+        if (dk.positive) return dk.positive;
+      }
+
+      // General contextual breakdown for uploaded PDFs or custom questions
+      return `Great question on "${block.sectionTitle}". Looking directly at this passage—"${block.pdfContent.slice(0, 140)}..."—the core idea is that ${block.formula ? `the relationship ${block.formula} governs how the output responds to changes in the input` : 'each parameter directly controls the system response before moving to the next stage'}.`;
+    }
+
+    function appendDoubtMessage(role, text, sectionTitle) {
+      const feed = document.getElementById('doubtChatFeed');
+      if (!feed) return;
+
+      const wrapper = document.createElement('div');
+      if (role === 'student') {
+        wrapper.className = 'bg-amber-500/10 border border-amber-500/30 rounded-xl p-2.5 text-xs';
+        wrapper.innerHTML = `
+          <div class="flex items-center justify-between text-[10px] text-amber-300 font-semibold mb-1">
+            <span>YOU ASKED (DOUBT)</span>
+            <span class="truncate max-w-[180px]">${sectionTitle}</span>
+          </div>
+          <p class="text-slate-100">${escapeHtml(text)}</p>
+        `;
+      } else {
+        wrapper.className = 'bg-indigo-500/10 border border-indigo-500/30 rounded-xl p-2.5 text-xs';
+        wrapper.innerHTML = `
+          <div class="flex items-center justify-between text-[10px] text-indigo-300 font-semibold mb-1">
+            <span>AI TEACHER EXPLANATION</span>
+            <span>Say "continue" to resume</span>
+          </div>
+          <p class="text-slate-200 leading-relaxed">${escapeHtml(text)}</p>
+        `;
+      }
+      feed.appendChild(wrapper);
+      feed.scrollTop = feed.scrollHeight;
+    }
+
+    function clearDoubtHistory() {
+      const feed = document.getElementById('doubtChatFeed');
+      if (!feed) return;
+      feed.innerHTML = `
+        <div class="text-xs text-slate-400 bg-slate-900/90 border border-slate-800 rounded-lg p-2.5">
+          Doubt log cleared. Say or click <strong>"doubt"</strong> anytime to interrupt the teacher and ask a question!
+        </div>
+      `;
+    }
+
+    // =========================================================================
+    // REAL PDF UPLOAD & EXTRACTION VIA PDF.JS
+    // =========================================================================
+    function handlePdfDragOver(event) {
+      event.preventDefault();
+      event.stopPropagation();
+      const overlay = document.getElementById('pdfDragOverlay');
+      if (overlay) overlay.classList.remove('hidden');
+    }
+
+    function handlePdfDragLeave(event) {
+      event.preventDefault();
+      event.stopPropagation();
+      const overlay = document.getElementById('pdfDragOverlay');
+      if (overlay) overlay.classList.add('hidden');
+    }
+
+    function handlePdfDrop(event) {
+      event.preventDefault();
+      event.stopPropagation();
+      const overlay = document.getElementById('pdfDragOverlay');
+      if (overlay) overlay.classList.add('hidden');
+      const file = event.dataTransfer?.files?.[0];
+      if (!file) return;
+      if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+        showToast('Please drop a valid .pdf file.', 'amber');
+        return;
+      }
+      loadPdfFileObject(file);
+    }
+
+    async function handlePdfUpload(event) {
+      const file = event.target?.files?.[0];
+      if (!file) return;
+      await loadPdfFileObject(file);
+    }
+
+    async function loadPdfFileObject(file) {
+
+      showToast(`Loading "${file.name}" and extracting teaching blocks...`, 'indigo');
+      const titleEl = document.getElementById('currentDocTitle');
+      if (titleEl) titleEl.textContent = file.name;
+
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const extractedBlocks = [];
+
+        const maxPages = Math.min(pdf.numPages, 15);
+        for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
+          const page = await pdf.getPage(pageNum);
+          const textContent = await page.getTextContent();
+          const rawStrings = textContent.items.map((item) => item.str).join(' ').replace(/\s+/g, ' ').trim();
+
+          if (!rawStrings) continue;
+
+          // Chunk page text into 2-3 readable teaching segments per page
+          const sentences = rawStrings.match(/[^.!?]+[.!?]+/g) || [rawStrings];
+          const chunkSize = Math.max(2, Math.ceil(sentences.length / 2));
+
+          for (let i = 0; i < sentences.length; i += chunkSize) {
+            const chunkText = sentences.slice(i, i + chunkSize).join(' ').trim();
+            if (chunkText.length < 20) continue;
+            const secNum = extractedBlocks.length + 1;
+            const ped = synthesizePedagogicalLayerForText(chunkText, `Page ${pageNum}, Segment ${secNum}`);
+            extractedBlocks.push({
+              id: `pdf-custom-${secNum}`,
+              page: pageNum,
+              sectionTitle: `Page ${pageNum} • Concept Block ${secNum}`,
+              pdfContent: chunkText,
+              formula: '',
+              diagramType: '',
+              conceptFocus: ped.conceptFocus,
+              depthScripts: ped.depthScripts,
+              teacherScript: ped.depthScripts[3],
+              doubtKnowledge: ped.doubtKnowledge
+            });
+          }
+        }
+
+        if (extractedBlocks.length === 0) {
+          showToast('This PDF appears to be scanned images without selectable text. Kept sample notes loaded.', 'amber');
+          return;
+        }
+
+        stopAllSpeech();
+        state.blocks = extractedBlocks;
+        state.currentIndex = 0;
+        state.botMode = 'IDLE';
+        renderLectureBlocks();
+        updateAllUI();
+        botScrollToBlock(0, true);
+        showToast(`Loaded ${extractedBlocks.length} teaching blocks from "${file.name}"! Click Start Live Teaching.`, 'emerald');
+      } catch (err) {
+        showToast('Could not parse PDF file. Make sure it is a valid PDF document.', 'amber');
+      }
+    }
+
+    // =========================================================================
+    // UI SYNCHRONIZATION HELPERS
+    // =========================================================================
+    function updateAllUI() {
+      updateBotStateBadgeUI();
+      updateScrollPriorityUI();
+      updateMicUI();
+      updateProgressUI();
+    }
+
+    function updateBotStateBadgeUI() {
+      const badge = document.getElementById('botStateBadge');
+      const playLabel = document.getElementById('mainPlayPauseLabel');
+      const subtitle = document.getElementById('teacherSubtitle');
+      const doubtIndicator = document.getElementById('doubtStateIndicator');
+      const eqBars = document.querySelectorAll('#voiceEqualizer span');
+      const block = state.blocks[state.currentIndex];
+
+      if (doubtIndicator) {
+        doubtIndicator.classList.toggle('hidden', state.botMode !== 'DOUBT_MODE');
+      }
+
+      eqBars.forEach((bar, i) => {
+        if (state.botMode === 'TEACHING') {
+          bar.classList.add('eq-bar-active');
+          bar.style.animationDelay = `${i * 0.12}s`;
+        } else {
+          bar.classList.remove('eq-bar-active');
+        }
+      });
+
+      if (state.botMode === 'TEACHING') {
+        badge.textContent = 'LIVE TEACHING & SCROLLING';
+        badge.className = 'px-2 py-0.5 text-[11px] font-semibold rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40';
+        playLabel.textContent = 'Pause Teacher';
+        subtitle.textContent = `Explaining: ${block?.sectionTitle || ''}`;
+        document.getElementById('liveTeacherTranscript').textContent = buildExplanationForDepth(block, state.explanationDepth);
+      } else if (state.botMode === 'DOUBT_MODE') {
+        badge.textContent = 'LISTENING TO DOUBT';
+        badge.className = 'px-2 py-0.5 text-[11px] font-semibold rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40';
+        playLabel.textContent = 'Resume ("continue")';
+        subtitle.textContent = 'Paused for your doubt — ask below or say "continue"';
+      } else if (state.botMode === 'PAUSED_WAITING') {
+        badge.textContent = 'PAUSED ("GIVE ME A MINUTE")';
+        badge.className = 'px-2 py-0.5 text-[11px] font-semibold rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/40';
+        playLabel.textContent = 'Resume ("continue")';
+        subtitle.textContent = 'Waiting for you — say or click "continue" to resume';
+      } else {
+        badge.textContent = 'READY TO TEACH';
+        badge.className = 'px-2 py-0.5 text-[11px] font-semibold rounded-full bg-slate-800 text-slate-300 border border-slate-700';
+        playLabel.textContent = 'Start Live Teaching';
+        subtitle.textContent = 'Click "Start Live Teaching" or say "continue"';
+      }
+
+      const tag = document.getElementById('currentBlockTag');
+      if (tag) tag.textContent = `Block #${state.currentIndex + 1} of ${state.blocks.length}`;
+
+      const dockBlock = document.getElementById('dockBlockIndicator');
+      if (dockBlock) dockBlock.textContent = `Sec ${state.currentIndex + 1}/${state.blocks.length}`;
+
+      const dockDot = document.getElementById('dockStateDot');
+      const dockContinueLabel = document.getElementById('dockContinueLabel');
+      if (dockDot) {
+        if (state.botMode === 'TEACHING') {
+          dockDot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse';
+        } else if (state.botMode === 'PAUSED_WAITING') {
+          dockDot.className = 'w-2.5 h-2.5 rounded-full bg-sky-400';
+        } else if (state.botMode === 'DOUBT_MODE') {
+          dockDot.className = 'w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping';
+        } else {
+          dockDot.className = 'w-2.5 h-2.5 rounded-full bg-slate-400';
+        }
+      }
+      if (dockContinueLabel) {
+        dockContinueLabel.textContent = state.botMode === 'IDLE' ? 'Start' : (state.botMode === 'TEACHING' ? 'Restart Sec' : 'Continue');
+      }
+    }
+
+    function updateScrollPriorityUI() {
+      const dot = document.getElementById('scrollPriorityDot');
+      const label = document.getElementById('scrollPriorityLabel');
+      const cdText = document.getElementById('scrollCooldownText');
+      const syncBtn = document.getElementById('syncScrollBtn');
+      const jumpBtn = document.getElementById('jumpTeachHereBtn');
+      const alertBar = document.getElementById('userScrollAlertBar');
+
+      if (!state.autoScrollEnabled) {
+        dot.className = 'w-2.5 h-2.5 rounded-full bg-slate-400';
+        label.textContent = 'Manual Scroll Only (Auto-Scroll Off)';
+        label.className = 'font-semibold text-slate-300 ml-1';
+        cdText.classList.add('hidden');
+        syncBtn.classList.add('hidden');
+        jumpBtn.classList.remove('hidden');
+        alertBar.classList.add('hidden');
+        return;
+      }
+
+      if (state.userScrollOverride) {
+        dot.className = 'w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping';
+        label.textContent = 'YOU Have Scroll Priority';
+        label.className = 'font-semibold text-amber-300 ml-1';
+        cdText.textContent = state.cooldownSeconds >= 900 ? '(Locked to You)' : `(Bot resumes in ${state.cooldownRemaining}s)`;
+        cdText.classList.remove('hidden');
+        syncBtn.classList.remove('hidden');
+        jumpBtn.classList.remove('hidden');
+        alertBar.classList.remove('hidden');
+      } else {
+        dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400';
+        label.textContent = 'Bot Auto-Scroll Active';
+        label.className = 'font-semibold text-emerald-400 ml-1';
+        cdText.classList.add('hidden');
+        syncBtn.classList.add('hidden');
+        jumpBtn.classList.add('hidden');
+        alertBar.classList.add('hidden');
+      }
+    }
+
+    function updateMicUI() {
+      const badge = document.getElementById('micStatusBadge');
+      const pulse = document.getElementById('micPulseCircle');
+      if (!badge || !pulse) return;
+
+      if (state.micListening) {
+        badge.textContent = 'MIC LISTENING LIVE';
+        badge.className = 'px-2 py-0.5 text-[10px] font-semibold rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/30';
+        pulse.className = 'w-3 h-3 rounded-full bg-emerald-400 mic-pulse';
+      } else {
+        badge.textContent = 'WAKE-WORD BAR ACTIVE';
+        badge.className = 'px-2 py-0.5 text-[10px] font-semibold rounded-md bg-indigo-500/15 text-indigo-300 border border-indigo-500/30';
+        pulse.className = 'w-3 h-3 rounded-full bg-indigo-400';
+      }
+    }
+
+    function updateProgressUI() {
+      const total = state.blocks.length || 1;
+      const pct = Math.round(((state.currentIndex + 1) / total) * 100);
+      const bar = document.getElementById('lectureProgressBar');
+      const pctText = document.getElementById('lectureProgressPercent');
+      const counter = document.getElementById('pdfPageCounter');
+      if (bar) bar.style.width = `${pct}%`;
+      if (pctText) pctText.textContent = `${pct}%`;
+      if (counter) counter.textContent = `Section ${state.currentIndex + 1} / ${total}`;
+    }
+
+    function showToast(msg, color = 'indigo') {
+      const banner = document.getElementById('toastBanner');
+      const text = document.getElementById('toastMessage');
+      const icon = document.getElementById('toastIcon');
+      if (!banner || !text) return;
+      text.textContent = msg;
+      const colorMap = {
+        indigo: 'bg-indigo-400',
+        emerald: 'bg-emerald-400',
+        amber: 'bg-amber-400',
+        sky: 'bg-sky-400'
+      };
+      icon.className = `w-2.5 h-2.5 rounded-full shrink-0 ${colorMap[color] || 'bg-indigo-400'}`;
+      banner.classList.remove('hidden');
+      clearTimeout(banner._hideTimer);
+      banner._hideTimer = setTimeout(() => banner.classList.add('hidden'), 3800);
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+  </script>
+</body>
+</html>
